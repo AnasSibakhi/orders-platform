@@ -1,0 +1,46 @@
+# syntax=docker/dockerfile:1
+
+# ---- Stage 1: PHP dependencies ----------------------------------------
+FROM composer:2 AS vendor
+WORKDIR /app
+COPY . .
+RUN composer install --no-dev --no-interaction --no-progress --optimize-autoloader
+
+# ---- Stage 2: front-end assets (Vite) -----------------------------------
+FROM node:20-alpine AS assets
+WORKDIR /app
+COPY package.json package-lock.json* ./
+RUN npm install
+COPY . .
+RUN npm run build
+
+# ---- Stage 3: runtime (FrankenPHP) --------------------------------------
+FROM dunglas/frankenphp:1-php8.3-alpine
+
+# Laravel's required PHP extensions.
+RUN install-php-extensions \
+        pdo_pgsql \
+        mbstring \
+        bcmath \
+        gd \
+        zip \
+        opcache \
+        redis
+
+WORKDIR /app
+
+COPY --from=vendor /app ./
+COPY --from=assets /app/public/build ./public/build
+COPY Caddyfile /etc/caddy/Caddyfile
+
+# storage/ and bootstrap/cache/ must be writable by the user FrankenPHP
+# runs as — unlike the older serverless-function runtime, this is a real
+# container with a normal (if ephemeral-across-restarts) filesystem.
+RUN chown -R www-data:www-data storage bootstrap/cache \
+    && chmod -R 775 storage bootstrap/cache
+
+ENV PORT=80
+ENV APP_ENV=production
+ENV LOG_CHANNEL=stderr
+
+CMD ["frankenphp", "run", "--config", "/etc/caddy/Caddyfile"]

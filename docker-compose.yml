@@ -1,0 +1,63 @@
+services:
+  app:
+    build: .
+    ports:
+      - "8000:8000"
+    environment:
+      APP_NAME: "Orders Platform"
+      APP_ENV: local
+      APP_DEBUG: "true"
+      APP_URL: "http://localhost:8000"
+      APP_LOCALE: ar
+
+      DB_CONNECTION: pgsql
+      DB_HOST: postgres
+      DB_PORT: "5432"
+      DB_DATABASE: orders_platform
+      DB_USERNAME: orders_platform
+      DB_PASSWORD: secret
+      DB_SSLMODE: disable
+
+      SESSION_DRIVER: redis
+      CACHE_STORE: redis
+      QUEUE_CONNECTION: redis
+      REDIS_HOST: redis
+      REDIS_PORT: "6379"
+
+      MAIL_MAILER: log
+
+      # Change these before anyone else can reach this instance.
+      ADMIN_EMAIL: admin@example.com
+      ADMIN_PASSWORD: ChangeMe123!
+    depends_on:
+      - postgres
+      - redis
+    # No bind mount here on purpose: mounting the host folder over
+    # /var/www/html would hide the vendor/ directory that gets installed
+    # inside the image during `docker build` (composer isn't available on
+    # the host). If you want live-reload while developing later, add a
+    # named volume just for vendor/ instead of overriding the whole tree.
+
+  # Local Postgres for development. Production uses Supabase's managed
+  # Postgres instead (see .env.example) — this container just mirrors the
+  # same engine locally so behavior matches between dev and prod.
+  postgres:
+    image: postgres:17-alpine
+    restart: unless-stopped
+    environment:
+      POSTGRES_DB: orders_platform
+      POSTGRES_USER: orders_platform
+      POSTGRES_PASSWORD: secret
+    ports:
+      - "5432:5432"
+    volumes:
+      - postgres_data:/var/lib/postgresql/data
+
+  redis:
+    image: redis:7-alpine
+    restart: unless-stopped
+    ports:
+      - "6379:6379"
+
+volumes:
+  postgres_data:
